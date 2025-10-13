@@ -1,0 +1,446 @@
+DECLARE SUB center (row!, text$, maxcol!)
+DECLARE SUB sendstr (strng$)
+DECLARE SUB recvstr ()
+DECLARE SUB getturn ()
+DECLARE SUB updatehis ()
+DECLARE SUB send (byte AS INTEGER)
+DECLARE SUB taketurn ()
+DECLARE SUB update ()
+DECLARE FUNCTION dirpos$ (length!, x%, y%)
+DECLARE SUB init ()
+DECLARE SUB grid ()
+DECLARE FUNCTION recieve% ()
+DECLARE SUB position ()
+CONST TRUE = -1, false = 0
+DIM SHARED lptport%, mygrid$(17, 9)
+DIM SHARED air, bat, cru1, cru2, des1, des2, des3, subs
+DIM SHARED hisgrid$(17, 9)
+DIM SHARED hair, hbat, hcru1, hcru2, hdes1, hdes2, hdes3, hsub
+DIM SHARED endofgame
+init
+SCREEN 9
+grid
+position
+IF INP(lptport% + 1) = 255 THEN turn = false: OUT lptport%, 15
+IF INP(lptport% + 1) <> 255 THEN OUT lptport%, 15: LOCATE 24, 1: PRINT "Waiting for Partner ..."; : DO WHILE INP(lptport% + 1) <> 255: LOOP: turn = TRUE
+endofgame = false
+
+DO
+IF turn = TRUE THEN PALETTE 8, 6: updatehis
+IF turn = TRUE THEN taketurn
+IF turn = false THEN PALETTE 8, 7: update
+IF turn = false THEN getturn
+IF endofgame = false THEN IF turn = false THEN turn = TRUE ELSE turn = false
+LOOP UNTIL endofgame = TRUE
+
+IF turn = TRUE THEN CLS : LOCATE 10, 29: COLOR 14: PRINT "Congratulations!!"
+IF turn = TRUE THEN : LOCATE 11, 29: PRINT "You have Won"
+IF turn = false THEN CLS : LOCATE 10, 25: COLOR 14: PRINT "This just isn't your day!!"
+IF turn = false THEN LOCATE 11, 25: PRINT "You have Lost"
+DO: PRINT "Play again "; : INPUT ; "", yn$
+LOOP UNTIL INSTR("YN", UCASE$(yn$))
+IF UCASE$(yn$) = "Y" THEN RUN
+END
+
+SUB center (row, text$, maxcol)
+  col = maxcol \ 2
+  colas = col - (LEN(text$) / 2 + .5)
+  IF colas < 1 THEN colas = 1
+  LOCATE row, colas
+  PRINT text$;
+END SUB
+
+FUNCTION dirpos$ (length, x%, y%)
+length = length - 1
+IF y% + length < 10 THEN north = TRUE
+IF y% - length > -1 THEN south = TRUE
+IF x% + length < 17 THEN east = TRUE
+IF x% - length > -1 THEN west = TRUE
+FOR n = 1 TO length
+IF north = TRUE THEN IF mygrid$(x%, y% + n) <> "" THEN north = false
+IF south = TRUE THEN IF mygrid$(x%, y% - n) <> "" THEN south = false
+IF east = TRUE THEN IF mygrid$(x% + n, y%) <> "" THEN east = false
+IF west = TRUE THEN IF mygrid$(x% - n, y%) <> "" THEN west = false
+NEXT
+IF north = TRUE THEN e$ = "N|"
+IF south = TRUE THEN e$ = e$ + "S|"
+IF east = TRUE THEN e$ = e$ + "E|"
+IF west = TRUE THEN e$ = e$ + "W|"
+FOR n = 2 TO 8 STEP 2
+IF LEN(e$) = n THEN e$ = LEFT$(e$, n - 1)
+NEXT n
+dirpos$ = e$
+END FUNCTION
+
+SUB getturn
+LOCATE 24, 1: PRINT "Waiting for missile to be fired ...";
+x% = recieve
+y% = recieve
+IF mygrid$(x%, y%) = "" THEN send (0): mygrid$(x%, y%) = "x"
+IF mygrid$(x%, y%) = "B" THEN send (1): mygrid$(x%, y%) = mygrid$(x%, y%) + "X": bat = bat + 1
+IF mygrid$(x%, y%) = "C1" THEN send (2): mygrid$(x%, y%) = mygrid$(x%, y%) + "X": cru1 = cru1 + 1
+IF mygrid$(x%, y%) = "C2" THEN send (3): mygrid$(x%, y%) = mygrid$(x%, y%) + "X": cru2 = cru2 + 1
+IF mygrid$(x%, y%) = "D1" THEN send (4): mygrid$(x%, y%) = mygrid$(x%, y%) + "X": des1 = des1 + 1
+IF mygrid$(x%, y%) = "D2" THEN send (5): mygrid$(x%, y%) = mygrid$(x%, y%) + "X": des2 = des2 + 1
+IF mygrid$(x%, y%) = "D3" THEN send (6): mygrid$(x%, y%) = mygrid$(x%, y%) + "X": des3 = des3 + 1
+IF LEFT$(mygrid$(x%, y%), 1) = "S" THEN send (7): mygrid$(x%, y%) = mygrid$(x%, y%) + "X": subs = subs + 1
+IF mygrid$(x%, y%) = "A" THEN send (8): mygrid$(x%, y%) = mygrid$(x%, y%) + "X": air = air + 1
+CLS : update
+recvstr
+COLOR 15
+LOCATE 24, 1: PRINT "Press any key to continue...";
+DO: LOOP UNTIL INKEY$ = ""
+DO: LOOP UNTIL INKEY$ <> ""
+IF air = 6 AND bat = 5 AND cru1 = 4 AND cru2 = 4 AND des1 = 3 AND des2 = 3 AND des3 = 3 AND subs = 4 THEN endofgame = TRUE
+END SUB
+
+SUB grid
+FOR x = 0 TO 18
+LINE (x * 32 + 30, 10)-(x * 32 + 30, 280), 8
+NEXT
+FOR y = 0 TO 10
+LINE (30, y * 27 + 10)-(606, y * 27 + 10), 8
+NEXT
+COLOR 14
+FOR n = 9 TO 0 STEP -1
+LOCATE n * 2 + 2, 1
+PRINT 9 - n
+NEXT
+LOCATE 22, 5
+FOR n = 0 TO 17
+IF n < 10 THEN PRINT n; " ";
+IF n >= 10 THEN PRINT n;
+NEXT n
+END SUB
+
+SUB init
+DEFINT A-Z
+CLS
+DEF SEG = 0
+DIM lpt(1 TO 3)
+lpt(1) = PEEK(&H408) + PEEK(&H409) * 256
+lpt(2) = PEEK(&H40A) + PEEK(&H40B) * 256
+lpt(3) = PEEK(&H40C) + PEEK(&H40D) * 256
+DEF SEG
+av$ = "("
+IF lpt(1) <> 0 THEN av$ = av$ + "1"
+IF lpt(2) <> 0 THEN IF av$ <> "(" THEN av$ = av$ + "|2" ELSE av$ = av$ + "2"
+IF lpt(3) <> 0 THEN IF av$ <> "(" THEN av$ = av$ + "|3" ELSE av$ = av$ + "3"
+av$ = av$ + ")"
+COLOR 12
+PRINT "  Bi-Directional   Battle Ships";
+COLOR 10
+PRINT "       By DM Programmes"
+COLOR 12
+PRINT
+PRINT "          LPT Port  "; : COLOR 4: PRINT "|"; : COLOR 12: PRINT "    Base Port  "
+COLOR 4
+PRINT "        ~~~~~~~~~~~~|~~~~~~~~~~~~~~~"
+COLOR 3
+IF lpt(1) = 0 THEN
+   PRINT "              1     |    "; : COLOR 3: PRINT "Not Found": COLOR 3
+   ELSE
+   PRINT "              1     "; : COLOR 4: PRINT "|    "; : COLOR 11: PRINT lpt(1); "  ("; HEX$(lpt(1)); ")": COLOR 3
+   END IF
+IF lpt(2) = 0 THEN
+   PRINT "              2     "; : COLOR 4: PRINT "|    "; : COLOR 3: PRINT "Not Found": COLOR 3
+   ELSE
+   PRINT "              2     "; : COLOR 4: PRINT "|    "; : COLOR 11: PRINT lpt(2); "  ("; HEX$(lpt(2)); ")": COLOR 3
+   END IF
+IF lpt(3) = 0 THEN
+   PRINT "              3     "; : COLOR 4: PRINT "|    "; : COLOR 3: PRINT "Not Found": COLOR 3
+   ELSE
+   PRINT "              3     "; : COLOR 4: PRINT "|    "; : COLOR 11: PRINT lpt(3); "  ("; HEX$(lpt(3)); ")": COLOR 3
+   END IF
+PRINT
+IF av$ = "()" THEN PRINT " NO LPT PORTS ": END
+IF LEN(av$) = 3 THEN
+   x$ = MID$(av$, 2, 1)
+   PRINT " Only one LPT Port! LPT"; x$; " Using it!"
+   DO: LOOP WHILE INKEY$ <> ""
+   DO: LOOP UNTIL INKEY$ <> ""
+   ELSE
+      DO
+      COLOR 3
+      PRINT "What LPT port do you want to use " + av$ + " ? ";
+      COLOR 11
+      INPUT "", x$
+      LOOP UNTIL INSTR(av$, x$)
+   END IF
+lptport% = lpt(VAL(x$))
+OUT lptport%, 0
+END SUB
+
+DEFSNG A-Z
+SUB position
+DO: DO
+   LOCATE 24, 1
+   PRINT "Enter Position for Aircraft Carrier (x <ENTER> y) :";
+   INPUT ; "", x%
+   INPUT ; ",", y%
+   LOCATE 24, 1
+   PRINT STRING$(60, " ");
+LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9
+LOOP UNTIL mygrid$(x%, y%) = ""
+DO
+   LOCATE 24, 1
+   d$ = dirpos(6, x%, y%)
+   DO
+   PRINT "Enter direction of ship ("; d$; ") :";
+   INPUT ; "", e$
+   LOCATE 24, 1: PRINT STRING$(60, " ");
+   LOOP UNTIL e$ <> ""
+LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
+FOR n = 0 TO 5
+IF UCASE$(e$) = "N" THEN mygrid$(x%, y% + n) = "A"
+IF UCASE$(e$) = "S" THEN mygrid$(x%, y% - n) = "A"
+IF UCASE$(e$) = "E" THEN mygrid$(x% + n, y%) = "A"
+IF UCASE$(e$) = "W" THEN mygrid$(x% - n, y%) = "A"
+NEXT
+update
+DO: DO
+   LOCATE 24, 1
+   PRINT "Enter Position for Battleship (x <ENTER> y) :";
+   INPUT ; "", x%
+   INPUT ; ",", y%
+   LOCATE 24, 1
+   PRINT STRING$(60, " ");
+LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9
+LOOP UNTIL mygrid$(x%, y%) = ""
+DO
+   LOCATE 24, 1
+   d$ = dirpos(5, x%, y%)
+   IF LEN(d$) = 1 THEN e$ = d$: EXIT DO
+   DO
+   PRINT "Enter direction of ship ("; d$; ") :";
+   INPUT ; "", e$
+   LOCATE 24, 1: PRINT STRING$(60, " ");
+   LOOP UNTIL e$ <> ""
+LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
+FOR n = 0 TO 4
+IF UCASE$(e$) = "N" THEN mygrid$(x%, y% + n) = "B"
+IF UCASE$(e$) = "S" THEN mygrid$(x%, y% - n) = "B"
+IF UCASE$(e$) = "E" THEN mygrid$(x% + n, y%) = "B"
+IF UCASE$(e$) = "W" THEN mygrid$(x% - n, y%) = "B"
+NEXT
+update
+FOR ships = 1 TO 2
+DO: DO
+   LOCATE 24, 1
+   PRINT "Enter Position for Crusier Ship #"; ships; " (x <ENTER> y) :";
+   INPUT ; "", x%
+   INPUT ; ",", y%
+   LOCATE 24, 1
+   PRINT STRING$(60, " ");
+LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9
+LOOP UNTIL mygrid$(x%, y%) = ""
+DO
+   LOCATE 24, 1
+   d$ = dirpos(4, x%, y%)
+   IF LEN(d$) = 1 THEN e$ = d$: EXIT DO
+   DO
+   PRINT "Enter direction of ship ("; d$; ") :";
+   INPUT ; "", e$
+   LOCATE 24, 1: PRINT STRING$(60, " ");
+   LOOP UNTIL e$ <> ""
+LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
+FOR n = 0 TO 3
+IF UCASE$(e$) = "N" THEN mygrid$(x%, y% + n) = "C" + LTRIM$(STR$(ships))
+IF UCASE$(e$) = "S" THEN mygrid$(x%, y% - n) = "C" + LTRIM$(STR$(ships))
+IF UCASE$(e$) = "E" THEN mygrid$(x% + n, y%) = "C" + LTRIM$(STR$(ships))
+IF UCASE$(e$) = "W" THEN mygrid$(x% - n, y%) = "C" + LTRIM$(STR$(ships))
+NEXT
+update
+NEXT ships
+FOR ships = 1 TO 3
+DO: DO
+   LOCATE 24, 1
+   PRINT "Enter Position for Destroyer Ship #"; ships; " (x <ENTER> y) :";
+   INPUT ; "", x%
+   INPUT ; ",", y%
+   LOCATE 24, 1
+   PRINT STRING$(60, " ");
+LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9
+LOOP UNTIL mygrid$(x%, y%) = ""
+DO
+   LOCATE 24, 1
+   d$ = dirpos(3, x%, y%)
+   IF LEN(d$) = 1 THEN e$ = d$: EXIT DO
+   DO
+   PRINT "Enter direction of ship ("; d$; ") :";
+   INPUT ; "", e$
+   LOCATE 24, 1: PRINT STRING$(60, " ");
+   LOOP UNTIL e$ <> ""
+LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
+FOR n = 0 TO 2
+IF UCASE$(e$) = "N" THEN mygrid$(x%, y% + n) = "D" + LTRIM$(STR$(ships))
+IF UCASE$(e$) = "S" THEN mygrid$(x%, y% - n) = "D" + LTRIM$(STR$(ships))
+IF UCASE$(e$) = "E" THEN mygrid$(x% + n, y%) = "D" + LTRIM$(STR$(ships))
+IF UCASE$(e$) = "W" THEN mygrid$(x% - n, y%) = "D" + LTRIM$(STR$(ships))
+NEXT
+update
+NEXT ships
+FOR ships = 1 TO 4
+DO: DO
+   LOCATE 24, 1
+   PRINT "Enter Position for Submarine Ship #"; ships; " (x <ENTER> y) :";
+   INPUT ; "", x%
+   INPUT ; ",", y%
+   LOCATE 24, 1
+   PRINT STRING$(60, " ");
+LOOP UNTIL x% > -1 AND x% < 18 AND y% > -1 AND y% < 10
+LOOP WHILE mygrid$(x%, y%) <> ""
+mygrid$(x%, y%) = "S" + LTRIM$(STR$(ships))
+update
+NEXT ships
+END SUB
+
+FUNCTION recieve%
+pet = 0
+DO UNTIL pet = 1
+IF (INP(lptport% + 1) AND 128) = 128 THEN pet = 0 ELSE pet = 1
+LOOP: pet = 0
+x = INP(lptport% + 1)
+y = x MOD 2 ^ 7
+low = y \ 8
+OUT lptport%, 123
+DO UNTIL pet = 1
+IF (INP(lptport% + 1) AND 128) = 128 THEN pet = 1 ELSE pet = 0
+LOOP: pet = 0
+x = INP(lptport% + 1)
+y = x MOD 2 ^ 7
+high = y \ 8
+byte = (high * 16) + low
+OUT lptport%, 0
+recieve% = byte
+END FUNCTION
+
+SUB recvstr
+c% = recieve% 'Get number of bytes
+COLOR 12
+IF (40 - (c% / 2 + .5)) < 1 THEN LOCATE 23, 1 ELSE LOCATE 23, (40 - (c% / 2 + .5))
+FOR n = 1 TO c%
+PRINT CHR$(recieve);
+NEXT
+END SUB
+
+SUB send (byte AS INTEGER)
+low = byte MOD 16
+high = byte \ 16
+x = INP(lptport% + 1)
+OUT lptport%, low + 16
+DO
+LOOP WHILE x = INP(lptport% + 1)
+x = INP(lptport% + 1)
+OUT lptport%, high
+DO
+LOOP WHILE x = INP(lptport% + 1)
+END SUB
+
+SUB sendstr (strng$)
+send (LEN(strng$))  ' Send number of Characters to follow.
+'Now send bytes
+COLOR 7
+LOCATE 24, 16
+FOR n = 1 TO LEN(strng$)
+char$ = MID$(strng$, n, 1)
+PRINT char$;
+send (ASC(char$))
+NEXT
+END SUB
+
+SUB taketurn
+DO: DO
+LOCATE 24, 1
+PRINT "Enter Coordinates to Fire At (x,y) :";
+INPUT ; "", x%
+INPUT ; ",", y%
+LOCATE 24, 1: PRINT SPACE$(60);
+LOOP UNTIL x% < 18 AND x% > -1 AND y% < 10 AND y% > -1
+LOOP WHILE hisgrid$(x%, y%) <> ""
+LOCATE 24, 1
+LINE INPUT ; "Enter Message :"; mess$
+send (x%): send (y%)
+strike1 = recieve
+sendstr mess$
+LOCATE 24, 1: PRINT SPACE$(60);
+IF strike1 = 0 THEN hisgrid$(x%, y%) = "x"
+IF strike1 = 1 THEN hbat = hbat + 1: hisgrid$(x%, y%) = "XB"
+IF strike1 = 2 THEN hcru1 = hcru1 + 1: hisgrid$(x%, y%) = "XC1"
+IF strike1 = 3 THEN hcru2 = hcru2 +DECLARE FUNCTION recieve% ()
+' Port 888 is the Data Port for LPT1
+OUT 888, 0   'clear data port
+CLS
+PRINT "Waiting for character..."
+c% = recieve% 'Get number of bytes
+FOR n = 1 TO c%
+strng$ = strng$ + CHR$(recieve%)  'Add byte sent to end of string
+LOCATE 10, 10: PRINT n; " bytes recieved out of "; c%
+NEXT
+PRINT strng$
+END
+
+FUNCTION recieve%
+pet = 0
+'Wait for Status port to Change signaling nibble ready for pickup.
+DO UNTIL pet = 1
+IF (INP(889) AND 128) = 128 THEN pet = 0 ELSE pet = 1
+LOOP: pet = 0
+x = INP(889)     'Get byte
+y = x MOD 2 ^ 7  'Extract relevant bits.
+low = y \ 8      'Store low nibble
+OUT 888, 123     'Send gotit signal
+'Wait for next nibble
+DO UNTIL pet = 1
+IF (INP(889) AND 128) = 128 THEN pet = 1 ELSE pet = 0
+LOOP: pet = 0
+x = INP(889)   'Get byte
+y = x MOD 2 ^ 7  'Extract relevant bits.
+high = y \ 8 'Store high nibble
+byte = (high * 16) + low   'Add High and low nibble together
+OUT 888, 0     ' Signal gotit
+recieve% = byte  'Terminate Function
+END FUNCTION
+DECLARE SUB send (byte AS INTEGER)
+CLS
+OUT 888, 0 'Clear Data port
+PRINT "Input string to send: ";
+LINE INPUT strng$  'Get string to send
+send (LEN(strng$))  ' Send number of Characters to follow.
+
+'Now send bytes
+FOR n = 1 TO LEN(strng$)
+char$ = MID$(strng$, n, 1)
+send (ASC(char$))
+LOCATE 10, 10: PRINT n; " bytes transfered"  'Report progress
+NEXT
+PRINT "Transfer complete..."
+END
+
+SUB send (byte AS INTEGER)
+low = byte MOD 16  'Extract low nibble
+high = byte \ 16  'Extract high nibble
+x = INP(889)      'Get current status
+OUT 888, low + 16 'send low nibble accross
+DO
+LOOP WHILE x = INP(889)  'Wait for input port to change
+x = INP(889)
+OUT 888, high     'Send high nibble
+DO
+LOOP WHILE x = INP(889)  'Wait for input port to change
+END SUB
+
+
+send (ASC(char$))
+LOCATE 10, 10: PRINT n; " bytes transfered"  'Report progress
+NEXT
+PRINT "Transfer complete..."
+END
+
+SUB send (byte)
+low = byte MOD 16  'Extract low nibble
+high = INT(byte / 16) 'Extract high nibble
+x = INP(889)      'GeDECLARE SUB divide (p!, x!, y!)
+LOCATE 10, 1: PRINT "Data :"
+LOCATE 11, 1: PRINT "Status :"
+LOCATE 12, 1: PRINT "Co
