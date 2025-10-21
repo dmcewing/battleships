@@ -1,34 +1,24 @@
-DECLARE SUB center (row!, text$, maxcol!)
-DECLARE SUB sendstr (strng$)
-DECLARE SUB recvstr ()
-DECLARE SUB getturn ()
-DECLARE SUB updatehis ()
-DECLARE SUB send (byte AS INTEGER)
-DECLARE SUB taketurn ()
-DECLARE SUB update ()
-DECLARE FUNCTION dirpos$ (length!, x%, y%)
-DECLARE SUB init ()
-DECLARE SUB grid ()
-DECLARE FUNCTION recieve% ()
-DECLARE SUB position ()
-
-CONST TRUE = -1, false = 0
-CONST DEFAULT_HOST = "localhost"
-CONST HOST_PORT = 25123
+'$INCLUDE:'constants.bi'
 
 DIM SHARED client&
+
 DIM SHARED mygrid$(17, 9)
 DIM SHARED air, bat, cru1, cru2, des1, des2, des3, subs
+DIM SHARED ships%(1 to LEN(SHIPS$))
+
 DIM SHARED hisgrid$(17, 9)
 DIM SHARED hair, hbat, hcru1, hcru2, hdes1, hdes2, hdes3, hsub
-DIM SHARED endofgame
+DIM SHARED hisships%(1 to LEN(SHIPS$))
+
 DIM SHARED opponentName$, myname$
 
 _TITLE "Battle Ships via IP"
-init
 SCREEN 9
+'SCREEN _NEWIMAGE(_DESKTOPWIDTH, _DESKTOPHEIGHT, 256), , ,
+'_SCREENMOVE _MIDDLE
+init
 update
-position
+PlaceShips
 
 SendInit myname$
 LOCATE 24, 1
@@ -36,8 +26,6 @@ PRINT "Waiting for Partner ...";
 c$ = GetCommand$
 turn = GetX(c$) <> 0
 opponentName$ = GetMessage$(c$)
-
-endofgame = false
 
 DO
     IF turn = TRUE THEN
@@ -50,15 +38,11 @@ DO
         update
         getturn
     END IF
-    IF endofgame = false THEN
-        IF turn = false THEN
-            turn = TRUE
-        ELSE
-            turn = false
-        END IF
+    IF NOT endOfGame% THEN
+        turn = NOT turn
     END IF
 
-LOOP UNTIL endofgame = TRUE
+LOOP UNTIL endOfGame%
 
 IF turn = TRUE THEN
     CLS
@@ -94,23 +78,25 @@ END SUB
 
 FUNCTION dirpos$ (length, x%, y%)
     length = length - 1
+    ' Check if the end of the boat is still on the grid.
     IF y% + length < 10 THEN north = TRUE
     IF y% - length > -1 THEN south = TRUE
     IF x% + length < 17 THEN east = TRUE
     IF x% - length > -1 THEN west = TRUE
+
+    ' Check if there is another boat in the way 
     FOR n = 1 TO length
         IF north = TRUE THEN IF mygrid$(x%, y% + n) <> "" THEN north = false
         IF south = TRUE THEN IF mygrid$(x%, y% - n) <> "" THEN south = false
         IF east = TRUE THEN IF mygrid$(x% + n, y%) <> "" THEN east = false
         IF west = TRUE THEN IF mygrid$(x% - n, y%) <> "" THEN west = false
     NEXT
-    IF north = TRUE THEN e$ = "N|"
-    IF south = TRUE THEN e$ = e$ + "S|"
-    IF east = TRUE THEN e$ = e$ + "E|"
-    IF west = TRUE THEN e$ = e$ + "W|"
-    FOR n = 2 TO 8 STEP 2
-        IF LEN(e$) = n THEN e$ = LEFT$(e$, n - 1)
-    NEXT n
+    IF north = TRUE THEN e$ = "|N"
+    IF south = TRUE THEN e$ = e$ + "|S"
+    IF east = TRUE THEN e$ = e$ + "|E"
+    IF west = TRUE THEN e$ = e$ + "|W"
+
+    e$ = MID$(e$, 2)
     dirpos$ = e$
 END FUNCTION
 
@@ -139,7 +125,6 @@ SUB getturn
     LOCATE 24, 1: PRINT "Press any key to continue...";
     DO: LOOP UNTIL INKEY$ = "" 'clear buffer
     DO: LOOP UNTIL INKEY$ <> "" 'Wait for key
-    IF air = 6 AND bat = 5 AND cru1 = 4 AND cru2 = 4 AND des1 = 3 AND des2 = 3 AND des3 = 3 AND subs = 4 THEN endofgame = TRUE
 END SUB
 
 SUB grid
@@ -163,11 +148,10 @@ SUB grid
 END SUB
 
 SUB init
-    DEFINT A-Z
     CLS
     'Input name
     'input host
-    PRINT "Enter host server/ip: (Empty will use default)";
+    _PRINTSTRING (100, 100), "Enter host server/ip: (Empty will use default)"
     INPUT ; ""; host$
     IF host$ = "" THEN host$ = DEFAULT_HOST
 
@@ -182,128 +166,50 @@ SUB init
 
 END SUB
 
-DEFSNG A-Z
-SUB position
-    DO: DO
-            LOCATE 24, 1
-            PRINT "Enter Position for Aircraft Carrier (x <ENTER> y) :";
-            INPUT ; "", x%
-            INPUT ; ",", y%
-            LOCATE 24, 1
-            PRINT STRING$(60, " ");
-        LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9
-    LOOP UNTIL mygrid$(x%, y%) = ""
+SUB PlaceShips
+    lastShipPlaced$ = ""
+    for n = 1 to len(SHIPS$)
+        ship$ = MID$(SHIPS$, n, 1)
+        if lastShipPlaced$ = ship$ then typeCount% = typeCount% + 1 else typeCount% = 1  
+        size% = 0
+        SELECT CASE UCASE$(ship$)
+            CASE "A": size% = AIRCRAFT_SIZE
+            CASE "B": size% = BATTLESHIP_SIZE
+            CASE "C": size% = CRUISER_SIZE
+            CASE "D": size% = DESTROYER_SIZE
+            CASE "S": size% = SUBMARINE_SIZE
+        END SELECT
+        PlaceShip UCASE$(ship$), size%, typeCount%
+        ships%(n) = size%
+        hisships%(n) = size%
+    Next
+END SUB
+
+SUB PlaceShip(shipName$, shipSize%, i)
     DO
         LOCATE 24, 1
-        d$ = dirpos(6, x%, y%)
-        DO
-            PRINT "Enter direction of ship ("; d$; ") :";
-            INPUT ; "", e$
-            LOCATE 24, 1: PRINT STRING$(60, " ");
-        LOOP UNTIL e$ <> ""
-    LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
-    FOR n = 0 TO 5
-        IF UCASE$(e$) = "N" THEN mygrid$(x%, y% + n) = "A"
-        IF UCASE$(e$) = "S" THEN mygrid$(x%, y% - n) = "A"
-        IF UCASE$(e$) = "E" THEN mygrid$(x% + n, y%) = "A"
-        IF UCASE$(e$) = "W" THEN mygrid$(x% - n, y%) = "A"
-    NEXT
-    update
-    DO: DO
-            LOCATE 24, 1
-            PRINT "Enter Position for Battleship (x <ENTER> y) :";
-            INPUT ; "", x%
-            INPUT ; ",", y%
-            LOCATE 24, 1
-            PRINT STRING$(60, " ");
-        LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9
-    LOOP UNTIL mygrid$(x%, y%) = ""
+        PRINT "Enter Position for "; shipName$; " #"; i; " (x <ENTER> y):";
+        INPUT ; "", x%
+        INPUT ; ",", y%
+        LOCATE 24, 1: PRINT SPACE$(60)
+    LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9 OR mygrid$(x%, y%) <> ""
+
     DO
-        LOCATE 24, 1
-        d$ = dirpos(5, x%, y%)
-        IF LEN(d$) = 1 THEN e$ = d$: EXIT DO
-        DO
-            PRINT "Enter direction of ship ("; d$; ") :";
-            INPUT ; "", e$
-            LOCATE 24, 1: PRINT STRING$(60, " ");
-        LOOP UNTIL e$ <> ""
+        d$ = dirpos(shipSize%, x%, y%)
+        PRINT "Enter direction of ship ("; d$; ") :";
+        INPUT ; "", e$
+        LOCATE 24, 1: PRINT SPACE$(60)
     LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
-    FOR n = 0 TO 4
-        IF UCASE$(e$) = "N" THEN mygrid$(x%, y% + n) = "B"
-        IF UCASE$(e$) = "S" THEN mygrid$(x%, y% - n) = "B"
-        IF UCASE$(e$) = "E" THEN mygrid$(x% + n, y%) = "B"
-        IF UCASE$(e$) = "W" THEN mygrid$(x% - n, y%) = "B"
+
+    FOR n = 0 TO shipSize% - 1
+        SELECT CASE UCASE$(e$)
+            CASE "N": mygrid$(x%, y% + n) = shipName$ + LTRIM$(STR$(i))
+            CASE "S": mygrid$(x%, y% - n) = shipName$ + LTRIM$(STR$(i))
+            CASE "E": mygrid$(x% + n, y%) = shipName$ + LTRIM$(STR$(i))
+            CASE "W": mygrid$(x% - n, y%) = shipName$ + LTRIM$(STR$(i))
+        END SELECT
     NEXT
     update
-    FOR ships = 1 TO 2
-        DO: DO
-                LOCATE 24, 1
-                PRINT "Enter Position for Crusier Ship #"; ships; " (x <ENTER> y) :";
-                INPUT ; "", x%
-                INPUT ; ",", y%
-                LOCATE 24, 1
-                PRINT STRING$(60, " ");
-            LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9
-        LOOP UNTIL mygrid$(x%, y%) = ""
-        DO
-            LOCATE 24, 1
-            d$ = dirpos(4, x%, y%)
-            IF LEN(d$) = 1 THEN e$ = d$: EXIT DO
-            DO
-                PRINT "Enter direction of ship ("; d$; ") :";
-                INPUT ; "", e$
-                LOCATE 24, 1: PRINT STRING$(60, " ");
-            LOOP UNTIL e$ <> ""
-        LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
-        FOR n = 0 TO 3
-            IF UCASE$(e$) = "N" THEN mygrid$(x%, y% + n) = "C" + LTRIM$(STR$(ships))
-            IF UCASE$(e$) = "S" THEN mygrid$(x%, y% - n) = "C" + LTRIM$(STR$(ships))
-            IF UCASE$(e$) = "E" THEN mygrid$(x% + n, y%) = "C" + LTRIM$(STR$(ships))
-            IF UCASE$(e$) = "W" THEN mygrid$(x% - n, y%) = "C" + LTRIM$(STR$(ships))
-        NEXT
-        update
-    NEXT ships
-    FOR ships = 1 TO 3
-        DO: DO
-                LOCATE 24, 1
-                PRINT "Enter Position for Destroyer Ship #"; ships; " (x <ENTER> y) :";
-                INPUT ; "", x%
-                INPUT ; ",", y%
-                LOCATE 24, 1
-                PRINT STRING$(60, " ");
-            LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9
-        LOOP UNTIL mygrid$(x%, y%) = ""
-        DO
-            LOCATE 24, 1
-            d$ = dirpos(3, x%, y%)
-            IF LEN(d$) = 1 THEN e$ = d$: EXIT DO
-            DO
-                PRINT "Enter direction of ship ("; d$; ") :";
-                INPUT ; "", e$
-                LOCATE 24, 1: PRINT STRING$(60, " ");
-            LOOP UNTIL e$ <> ""
-        LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
-        FOR n = 0 TO 2
-            IF UCASE$(e$) = "N" THEN mygrid$(x%, y% + n) = "D" + LTRIM$(STR$(ships))
-            IF UCASE$(e$) = "S" THEN mygrid$(x%, y% - n) = "D" + LTRIM$(STR$(ships))
-            IF UCASE$(e$) = "E" THEN mygrid$(x% + n, y%) = "D" + LTRIM$(STR$(ships))
-            IF UCASE$(e$) = "W" THEN mygrid$(x% - n, y%) = "D" + LTRIM$(STR$(ships))
-        NEXT
-        update
-    NEXT ships
-    FOR ships = 1 TO 4
-        DO: DO
-                LOCATE 24, 1
-                PRINT "Enter Position for Submarine Ship #"; ships; " (x <ENTER> y) :";
-                INPUT ; "", x%
-                INPUT ; ",", y%
-                LOCATE 24, 1
-                PRINT STRING$(60, " ");
-            LOOP UNTIL x% > -1 AND x% < 18 AND y% > -1 AND y% < 10
-        LOOP WHILE mygrid$(x%, y%) <> ""
-        mygrid$(x%, y%) = "S" + LTRIM$(STR$(ships))
-        update
-    NEXT ships
 END SUB
 
 SUB taketurn
@@ -326,24 +232,36 @@ SUB taketurn
     cmd$ = GetCommand$
     strike1 = GetY%(cmd$)
     LOCATE 24, 1: PRINT SPACE$(60);
-    IF strike1 = 0 THEN hisgrid$(x%, y%) = "x"
-    IF strike1 = 1 THEN hbat = hbat + 1: hisgrid$(x%, y%) = "XB"
-    IF strike1 = 2 THEN hcru1 = hcru1 + 1: hisgrid$(x%, y%) = "XC1"
-    IF strike1 = 3 THEN hcru2 = hcru2 + 1: hisgrid$(x%, y%) = "XC2"
-    IF strike1 = 4 THEN hdes1 = hdes1 + 1: hisgrid$(x%, y%) = "XD1"
-    IF strike1 = 5 THEN hdes2 = hdes2 + 1: hisgrid$(x%, y%) = "XD2"
-    IF strike1 = 6 THEN hdes3 = hdes3 + 1: hisgrid$(x%, y%) = "XD3"
-    IF strike1 = 7 THEN hsub = hsub + 1: hisgrid$(x%, y%) = "XS"
-    IF strike1 = 8 THEN hair = hair + 1: hisgrid$(x%, y%) = "XA"
+    IF strike1 = 0 THEN 
+        hisgrid$(x%, y%) = "x"
+    ELSE
+        hisships%(strike1) = hisships%(strike1) - 1
+        shipCode$ = MID$(SHIPS$, strike1, 1)
+        shipNum% = strike1 - INSTR(SHIPS$, shipCode$) 
+        hisgrid$(x%, y%) = "X" + MID$(SHIPS$, strike1, 1) + _TRIM$(STR$(shipNum%))
+    END IF
 
     updatehis
     COLOR 15
     LOCATE 24, 1: PRINT "Press any key to continue...";
     DO: LOOP UNTIL INKEY$ = "" 'clear buffer
     DO: LOOP UNTIL INKEY$ <> "" 'Wait for key
-    IF hair = 6 AND hbat = 5 AND hcru1 = 4 AND hcru2 = 4 AND hdes1 = 3 AND hdes2 = 3 AND hdes3 = 3 AND hsub = 4 THEN endofgame = TRUE
 
 END SUB
+
+FUNCTION endOfGame%
+    let mineToGo = 0
+    let hisToGo = 0
+    for n = LBOUND(ships%) to UBOUND(ships%)
+        mineToGo = mineToGo + ships%(n)
+    next
+    for n = LBOUND(hisships%) to UBOUND(hisships%)
+        hisToGo = hisToGo + ship
+    next
+
+    endOfGame% = (mineToGo = 0 OR hisToGo = 0)
+
+END FUNCTION
 
 SUB update
     CLS
