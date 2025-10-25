@@ -1,58 +1,48 @@
-'$INCLUDE:'constants.bi'
+'$DEBUG
+OPTION _EXPLICIT
+'$include:'sharedvariables.bi'
 
-DIM SHARED client&
+DIM yn$, c$, turn AS INTEGER
 
-DIM SHARED mygrid$(17, 9)
-DIM SHARED air, bat, cru1, cru2, des1, des2, des3, subs
-DIM SHARED ships%(1 to LEN(SHIPS$))
-
-DIM SHARED hisgrid$(17, 9)
-DIM SHARED hair, hbat, hcru1, hcru2, hdes1, hdes2, hdes3, hsub
-DIM SHARED hisships%(1 to LEN(SHIPS$))
-
-DIM SHARED opponentName$, myname$
-
-_TITLE "Battle Ships via IP"
+_TITLE "Battleships"
 SCREEN 9
-'SCREEN _NEWIMAGE(_DESKTOPWIDTH, _DESKTOPHEIGHT, 256), , ,
-'_SCREENMOVE _MIDDLE
-init
-update
+Init
+
+SCREEN _NEWIMAGE(640, 680, 9), , ,
+_SCREENMOVE _MIDDLE
+Update
 PlaceShips
 
 SendInit myname$
-LOCATE 24, 1
+'LOCATE 24, 1
 PRINT "Waiting for Partner ...";
 c$ = GetCommand$
+PRINT ""
 turn = GetX(c$) <> 0
 opponentName$ = GetMessage$(c$)
 
-DO
-    IF turn = TRUE THEN
-        PALETTE 8, 6
-        updatehis
-        taketurn
+DO WHILE NOT endOfGame%
+    Update
+    IF turn THEN
+        TakeTurn
+    ELSE
+        GetTurn
     END IF
-    IF turn = false THEN
-        PALETTE 8, 7
-        update
-        getturn
-    END IF
-    IF NOT endOfGame% THEN
-        turn = NOT turn
-    END IF
+    turn = NOT turn
+LOOP
 
-LOOP UNTIL endOfGame%
+'Reverse the last turn (switch)
+turn = NOT turn
 
+VIEW PRINT
+CLS
 IF turn = TRUE THEN
-    CLS
     LOCATE 10, 29
     COLOR 14
     PRINT "Congratulations!!"
     LOCATE 11, 29
     PRINT "You have Won"
 ELSE
-    CLS
     LOCATE 10, 25
     COLOR 14
     PRINT "This just isn't your day!!"
@@ -68,76 +58,64 @@ IF UCASE$(yn$) = "Y" THEN RUN
 IF client& <> 0 THEN CLOSE #client&
 END
 
-SUB center (row, text$, maxcol)
-    col = maxcol \ 2
-    colas = col - (LEN(text$) / 2 + .5)
-    IF colas < 1 THEN colas = 1
-    LOCATE row, colas
-    PRINT text$;
-END SUB
+SUB GetTurn
+    DIM cmd$, x%, y%, strike AS INTEGER
+    DIM message$
 
-FUNCTION dirpos$ (length, x%, y%)
-    length = length - 1
-    ' Check if the end of the boat is still on the grid.
-    IF y% + length < 10 THEN north = TRUE
-    IF y% - length > -1 THEN south = TRUE
-    IF x% + length < 17 THEN east = TRUE
-    IF x% - length > -1 THEN west = TRUE
-
-    ' Check if there is another boat in the way 
-    FOR n = 1 TO length
-        IF north = TRUE THEN IF mygrid$(x%, y% + n) <> "" THEN north = false
-        IF south = TRUE THEN IF mygrid$(x%, y% - n) <> "" THEN south = false
-        IF east = TRUE THEN IF mygrid$(x% + n, y%) <> "" THEN east = false
-        IF west = TRUE THEN IF mygrid$(x% - n, y%) <> "" THEN west = false
-    NEXT
-    IF north = TRUE THEN e$ = "|N"
-    IF south = TRUE THEN e$ = e$ + "|S"
-    IF east = TRUE THEN e$ = e$ + "|E"
-    IF west = TRUE THEN e$ = e$ + "|W"
-
-    e$ = MID$(e$, 2)
-    dirpos$ = e$
-END FUNCTION
-
-SUB getturn
-    DIM cmd$
-
-    LOCATE 24, 1: PRINT "Waiting for missile to be fired ...";
+    PRINT "Waiting for missile to be fired ...";
     cmd$ = GetCommand$
+    PRINT ""
 
     x% = GetX%(cmd$)
     y% = GetY%(cmd$)
-    IF mygrid$(x%, y%) = "" THEN SendResult (0): mygrid$(x%, y%) = "x"
-    IF mygrid$(x%, y%) = "B" THEN SendResult (1): mygrid$(x%, y%) = "X" + mygrid$(x%, y%): bat = bat + 1
-    IF mygrid$(x%, y%) = "C1" THEN SendResult (2): mygrid$(x%, y%) = "X" + mygrid$(x%, y%): cru1 = cru1 + 1
-    IF mygrid$(x%, y%) = "C2" THEN SendResult (3): mygrid$(x%, y%) = "X" + mygrid$(x%, y%): cru2 = cru2 + 1
-    IF mygrid$(x%, y%) = "D1" THEN SendResult (4): mygrid$(x%, y%) = "X" + mygrid$(x%, y%): des1 = des1 + 1
-    IF mygrid$(x%, y%) = "D2" THEN SendResult (5): mygrid$(x%, y%) = "X" + mygrid$(x%, y%): des2 = des2 + 1
-    IF mygrid$(x%, y%) = "D3" THEN SendResult (6): mygrid$(x%, y%) = "X" + mygrid$(x%, y%): des3 = des3 + 1
-    IF LEFT$(mygrid$(x%, y%), 1) = "S" THEN SendResult (7): mygrid$(x%, y%) = "X" + mygrid$(x%, y%): subs = subs + 1
-    IF mygrid$(x%, y%) = "A" THEN SendResult (8): mygrid$(x%, y%) = "X" + mygrid$(x%, y%): air = air + 1
-    CLS: update
-    'recvstr
-    message$ = GetMessage$(cmd$)
-    center 23, message$, 80
-    COLOR 15
-    LOCATE 24, 1: PRINT "Press any key to continue...";
-    DO: LOOP UNTIL INKEY$ = "" 'clear buffer
-    DO: LOOP UNTIL INKEY$ <> "" 'Wait for key
+    IF mygrid$(x%, y%) = "" THEN
+        SendResult (0)
+        mygrid$(x%, y%) = "x"
+    ELSE
+        strike = shipIndex%(mygrid$(x%, y%))
+        SendResult (strike)
+        mygrid$(x%, y%) = "X" + mygrid$(x%, y%)
+        shiphits(strike) = shiphits(strike) - 1
+    END IF
+    '    message$ = GetMessage$(cmd$)
+    '   COLOR 14
+    '  PRINT message$
+    ' COLOR 15
 END SUB
 
-SUB grid
-    CLS
+SUB Grid (isTop%)
+    DIM x AS INTEGER, y AS INTEGER, n AS INTEGER
+
+    DIM LeftMargin%, TopMargin%, cellHeight%, cellWidth%, bottom%, right%
+    DIM colour%
+
+    LeftMargin% = 30
+
+    IF isTop% THEN
+        TopMargin% = 10
+        colour% = 9
+    ELSE
+        TopMargin% = 319
+        colour% = 5
+    END IF
+
+    cellHeight% = 27
+    cellWidth% = 32
+
+    bottom% = (10 * cellHeight% + TopMargin%)
+    right% = (18 * cellWidth% + LeftMargin%)
+
     FOR x = 0 TO 18
-        LINE (x * 32 + 30, 10)-(x * 32 + 30, 280), 8
+        LINE (x * cellWidth% + LeftMargin%, TopMargin%)-(x * cellWidth% + LeftMargin%, bottom%), colour%
     NEXT
     FOR y = 0 TO 10
-        LINE (30, y * 27 + 10)-(606, y * 27 + 10), 8
+        LINE (LeftMargin%, y * cellHeight% + TopMargin%)-(right%, y * cellHeight% + TopMargin%), colour%
     NEXT
+
+    'Draw Axes labels
     COLOR 14
     FOR n = 9 TO 0 STEP -1
-        LOCATE n * 2 + 2, 1
+        LOCATE n * 2 + 2 + (22 * isTop% * -1), 1
         PRINT 9 - n
     NEXT
     LOCATE 22, 5
@@ -147,11 +125,26 @@ SUB grid
     NEXT n
 END SUB
 
-SUB init
+SUB Init
+    DIM host$, yn$
+
+    AutoPlaceShips = FALSE
+
     CLS
     'Input name
     'input host
-    _PRINTSTRING (100, 100), "Enter host server/ip: (Empty will use default)"
+
+    'COLOR 14
+    'PRINT "Play against computer? (Y/N)";
+    'COLOR 15
+    'yn$ = INKEY$
+    'IF UCASE$(yn$) = "N" THEN
+    '    NetworkGame = FALSE
+    'ELSE
+    '    NetworkGame = TRUE
+    COLOR 14
+    PRINT "Enter host server/ip: (Empty will use default)";
+    COLOR 15
     INPUT ; ""; host$
     IF host$ = "" THEN host$ = DEFAULT_HOST
 
@@ -161,115 +154,72 @@ SUB init
         END
     END IF
 
+    COLOR 14
     PRINT "Please give me a name (so they know who to send condolences too)";
+    COLOR 15
     INPUT ; myname$
+    '  END IF
+
+    COLOR 14
+    PRINT "Auto place ships (Y/N)?";
+    COLOR 15
+    INPUT ; yn$
+    IF UCASE$(yn$) = "Y" THEN AutoPlaceShips = TRUE
 
 END SUB
 
-SUB PlaceShips
-    lastShipPlaced$ = ""
-    for n = 1 to len(SHIPS$)
-        ship$ = MID$(SHIPS$, n, 1)
-        if lastShipPlaced$ = ship$ then typeCount% = typeCount% + 1 else typeCount% = 1  
-        size% = 0
-        SELECT CASE UCASE$(ship$)
-            CASE "A": size% = AIRCRAFT_SIZE
-            CASE "B": size% = BATTLESHIP_SIZE
-            CASE "C": size% = CRUISER_SIZE
-            CASE "D": size% = DESTROYER_SIZE
-            CASE "S": size% = SUBMARINE_SIZE
-        END SELECT
-        PlaceShip UCASE$(ship$), size%, typeCount%
-        ships%(n) = size%
-        hisships%(n) = size%
-    Next
-END SUB
-
-SUB PlaceShip(shipName$, shipSize%, i)
-    DO
-        LOCATE 24, 1
-        PRINT "Enter Position for "; shipName$; " #"; i; " (x <ENTER> y):";
-        INPUT ; "", x%
-        INPUT ; ",", y%
-        LOCATE 24, 1: PRINT SPACE$(60)
-    LOOP WHILE x% < 0 OR x% > 17 OR y% < 0 OR y% > 9 OR mygrid$(x%, y%) <> ""
-
-    DO
-        d$ = dirpos(shipSize%, x%, y%)
-        PRINT "Enter direction of ship ("; d$; ") :";
-        INPUT ; "", e$
-        LOCATE 24, 1: PRINT SPACE$(60)
-    LOOP WHILE INSTR(d$, UCASE$(e$)) = 0
-
-    FOR n = 0 TO shipSize% - 1
-        SELECT CASE UCASE$(e$)
-            CASE "N": mygrid$(x%, y% + n) = shipName$ + LTRIM$(STR$(i))
-            CASE "S": mygrid$(x%, y% - n) = shipName$ + LTRIM$(STR$(i))
-            CASE "E": mygrid$(x% + n, y%) = shipName$ + LTRIM$(STR$(i))
-            CASE "W": mygrid$(x% - n, y%) = shipName$ + LTRIM$(STR$(i))
-        END SELECT
-    NEXT
-    update
-END SUB
-
-SUB taketurn
-    DIM cmd$
+SUB TakeTurn
+    DIM cmd$, x%, y%, mess$, strike1 AS INTEGER
+    DIM shipCode$, shipNum%
 
     DO: DO
-            LOCATE 24, 1
+            CLS 2
             PRINT "Enter Coordinates to Fire At (x,y) :";
             INPUT ; "", x%
             INPUT ; ",", y%
-            LOCATE 24, 1: PRINT SPACE$(60);
+            PRINT
         LOOP UNTIL x% < 18 AND x% > -1 AND y% < 10 AND y% > -1
     LOOP WHILE hisgrid$(x%, y%) <> ""
-    LOCATE 24, 1
-    LINE INPUT ; "Enter Message :"; mess$
+
+    '    LINE INPUT ; "Enter Message :"; mess$
+    '   IF LEN(mess$) > 20 THEN mess$ = LEFT$(mess$, 20)
+    '  PRINT ""
+    mess$ = ""
     'send (x%): send (y%)
     'strike1 = recieve
     'sendstr mess$
     SendCommand x%, y%, mess$
     cmd$ = GetCommand$
     strike1 = GetY%(cmd$)
-    LOCATE 24, 1: PRINT SPACE$(60);
-    IF strike1 = 0 THEN 
+
+    IF strike1 = 0 THEN
         hisgrid$(x%, y%) = "x"
     ELSE
-        hisships%(strike1) = hisships%(strike1) - 1
-        shipCode$ = MID$(SHIPS$, strike1, 1)
-        shipNum% = strike1 - INSTR(SHIPS$, shipCode$) 
-        hisgrid$(x%, y%) = "X" + MID$(SHIPS$, strike1, 1) + _TRIM$(STR$(shipNum%))
+        hisshiphits(strike1) = hisshiphits(strike1) - 1
+        shipCode$ = MID$(SHIPLIST$, strike1, 1)
+        shipNum% = strike1 - INSTR(SHIPLIST$, shipCode$) + 1
+        hisgrid$(x%, y%) = "X" + shipCode$ + _TRIM$(STR$(shipNum%))
     END IF
-
-    updatehis
-    COLOR 15
-    LOCATE 24, 1: PRINT "Press any key to continue...";
-    DO: LOOP UNTIL INKEY$ = "" 'clear buffer
-    DO: LOOP UNTIL INKEY$ <> "" 'Wait for key
-
 END SUB
 
-FUNCTION endOfGame%
-    let mineToGo = 0
-    let hisToGo = 0
-    for n = LBOUND(ships%) to UBOUND(ships%)
-        mineToGo = mineToGo + ships%(n)
-    next
-    for n = LBOUND(hisships%) to UBOUND(hisships%)
-        hisToGo = hisToGo + ship
-    next
+SUB Update
+    DrawGrid mygrid$(), shiphits(), TRUE
+    DrawGrid hisgrid$(), hisshiphits(), FALSE
+END SUB
 
-    endOfGame% = (mineToGo = 0 OR hisToGo = 0)
-
-END FUNCTION
-
-SUB update
-    CLS
-    grid
+SUB DrawGrid (agData$(), agHits%(), topBottom%)
+    DIM x%, y%, value$, topOffset%, idx%
+    VIEW PRINT
+    Grid topBottom%
+    IF topBottom% THEN
+        topOffset% = 2
+    ELSE
+        topOffset% = 24
+    END IF
     FOR y% = 9 TO 0 STEP -1
         FOR x% = 0 TO 17
-            LOCATE ((9 - y%) * 2 + 2), (x% * 4 + 6)
-            LET value$ = mygrid$(x%, y%)
+            LOCATE ((9 - y%) * 2 + topOffset%), (x% * 4 + 6)
+            LET value$ = agData$(x%, y%)
             SELECT CASE LEFT$(value$, 1)
                 CASE "A"
                     COLOR 15
@@ -286,59 +236,25 @@ SUB update
                 CASE "x"
                     COLOR 15
             END SELECT
-            PRINT LEFT$(mygrid$(x%, y%), 2);
-        NEXT x%
-        PRINT
-    NEXT y%
-    COLOR 15
-
-END SUB
-
-SUB updatehis
-    CLS
-    grid
-    FOR y% = 9 TO 0 STEP -1
-        FOR x% = 0 TO 17
-            LOCATE ((9 - y%) * 2 + 2), (x% * 4 + 6)
-            LET value$ = hisgrid$(x%, y%)
-            SELECT CASE LEFT$(value$, 1)
-                CASE "x"
-                    COLOR 15
-                CASE "X"
-                    COLOR 12
-            END SELECT
-            LET reveal = false
-            SELECT CASE MID$(value$, 2)
-                CASE "A"
-                    IF hair = 6 THEN reveal = TRUE
-                CASE "B"
-                    IF hbat = 5 THEN reveal = TRUE
-                CASE "C1"
-                    IF hcru1 = 4 THEN reveal = TRUE
-                CASE "C2"
-                    IF hcru2 = 4 THEN reveal = TRUE
-                CASE "D1"
-                    IF hdes1 = 3 THEN reveal = TRUE
-                CASE "D2"
-                    IF hdes2 = 3 THEN reveal = TRUE
-                CASE "D3"
-                    IF hdes3 = 3 THEN reveal = TRUE
-                CASE "S"
-                    reveal = TRUE
-            END SELECT
-            IF reveal = TRUE THEN
-                PRINT MID$(value$, 2, 1);
-            ELSE
-                PRINT LEFT$(value$, 1)
+            IF topBottom% AND LEN(agData$(x%, y%)) > 0 THEN
+                PRINT LEFT$(agData$(x%, y%), 2);
+            ELSEIF LEN(agData$(x%, y%)) > 0 THEN
+                idx% = shipIndex%(agData$(x%, y%))
+                IF idx% = 0 THEN
+                    PRINT LEFT$(value$, 1);
+                ELSEIF agHits%(idx%) = 0 THEN
+                    PRINT LEFT$(value$, 2);
+                ELSE
+                    PRINT LEFT$(value$, 1);
+                END IF
             END IF
         NEXT x%
         PRINT
     NEXT y%
     COLOR 15
-
+    VIEW PRINT 44 TO 48
+    PRINT "":
 END SUB
-
-
 
 FUNCTION GetCommand$
     DIM temp$
@@ -350,6 +266,7 @@ FUNCTION GetCommand$
         IF NOT (EOF(client&)) AND LEN(temp$) > 0 THEN
             GetCommand$ = temp$
             IF temp$ = "ENDGAME" THEN
+                VIEW PRINT
                 LOCATE 24, 1
                 PRINT "Opponent has disconnected, I suppose therefore you won!"
                 END
@@ -359,39 +276,4 @@ FUNCTION GetCommand$
     LOOP
 END FUNCTION
 
-SUB SendCommand (x%, y%, message$)
-    DIM s$
-
-    s$ = "C"
-    s$ = s$ + RIGHT$("00" + RTRIM$(LTRIM$(STR$(x%))), 2)
-    s$ = s$ + RIGHT$("00" + RTRIM$(LTRIM$(STR$(y%))), 2)
-    s$ = s$ + message$
-
-    PUT #client&, , s$
-
-END SUB
-
-SUB SendResult (tye%)
-    DIM s$
-    s$ = "R00" + RIGHT$("00" + LTRIM$(RTRIM$(STR$(tye%))), 2)
-    PUT #client&, , s$
-
-END SUB
-
-SUB SendInit (me$)
-    DIM s$
-    s$ = "G0055" + me$
-    PUT #client&, , s$
-END SUB
-
-FUNCTION GetY% (cmd$)
-    GetY% = CINT(VAL(MID$(cmd$, 4, 2)))
-END FUNCTION
-
-FUNCTION GetX% (cmd$)
-    GetX% = CINT(VAL(MID$(cmd$, 2, 2)))
-END FUNCTION
-
-FUNCTION GetMessage$ (cmd$)
-    GetMessage$ = MID$(cmd$, 6)
-END FUNCTION
+'$include:'library.bi'

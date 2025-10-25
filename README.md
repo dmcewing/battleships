@@ -20,4 +20,5 @@ Now the extensions begin, because... why not.
 * [battle.bas.txt](./battle.bas.txt) - The source code file before recovery attempts.
 * [battle_ip.bas](./battle_ip.bas) - The base TCP protocol based program
 * [battlehost.bas](./battlehost.bas) - The host/server for the TCP based program.
+* [battlebot.bas](./battlebot.bas) - A Robotic host for playing against the computer
 
