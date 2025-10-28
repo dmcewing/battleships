@@ -18,7 +18,8 @@ Now the extensions begin, because... why not.
 ## Base files
 
 * [battle.bas.txt](./battle.bas.txt) - The source code file before recovery attempts.
-* [battle_ip.bas](./battle_ip.bas) - The base TCP protocol based program
+* [battle_ip.bas](./battle_ip.bas) - The base TCP protocol based program (this is the recovered program but with a TCP messaging layer)
+* [battle.bas](./battle.bas) - An enhanced battleship program, for playing with Battlebot. (Subs are extended to 2 squares)
 * [battlehost.bas](./battlehost.bas) - The host/server for the TCP based program.
 * [battlebot.bas](./battlebot.bas) - A Robotic host for playing against the computer
 
