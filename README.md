@@ -22,3 +22,21 @@ Now the extensions begin, because... why not.
 * [battlehost.bas](./battlehost.bas) - The host/server for the TCP based program.
 * [battlebot.bas](./battlebot.bas) - A Robotic host for playing against the computer
 
+## Battlehost
+
+Battle host implements a network game host pairing clients as the connect and proxying the messages.  This enables game play over a network (or Internet) as long as the client can reach the "host".
+
+## BattleBot
+
+BattleBot provides a computer opponent to play against.
+
+Battle Bot implements two strategies to hunt the ships:
+1. Easy: Randomly chooses target
+2. Hard: (default) Uses probability distribution
+
+To select the mode invoke battle bot with either Easy or Hard.  i.e.
+
+```bash
+./battlebot hard
+```
+
