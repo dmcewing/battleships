@@ -61,12 +61,12 @@ END SUB
 
 SUB PlaceShip (shipName$, shipSize%, i)
     DIM x%, y%, d$, e$, n AS INTEGER
-    CLS 2
     DO
         IF AutoPlaceShips THEN
             x% = INT(RND * 18)
             y% = INT(RND * 10)
         ELSE
+            CLS 2
             PRINT "Enter Position for "; shipName$; i; " (x <ENTER> y):";
             INPUT ; "", x%
             INPUT ; ",", y%

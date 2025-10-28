@@ -21,6 +21,8 @@ PRINT ""
 turn = GetX(c$) <> 0
 opponentName$ = GetMessage$(c$)
 
+_TITLE "Battleships: versus " + opponentName$
+
 DO WHILE NOT endOfGame%
     Update
     IF turn THEN
@@ -36,6 +38,7 @@ turn = NOT turn
 
 VIEW PRINT
 CLS
+IF client& <> 0 THEN CLOSE #client&
 IF turn = TRUE THEN
     LOCATE 10, 29
     COLOR 14
@@ -49,13 +52,7 @@ ELSE
     LOCATE 11, 25
     PRINT "You have Lost"
 END IF
-DO
-    PRINT "Play again ";
-    INPUT ; "", yn$
-LOOP UNTIL INSTR("YN", UCASE$(yn$))
 
-IF UCASE$(yn$) = "Y" THEN RUN
-IF client& <> 0 THEN CLOSE #client&
 END
 
 SUB GetTurn
@@ -143,9 +140,9 @@ SUB Init
     'ELSE
     '    NetworkGame = TRUE
     COLOR 14
-    PRINT "Enter host server/ip: (Empty will use default)";
+    PRINT "Enter host server/ip (Empty will use default)";
     COLOR 15
-    INPUT ; ""; host$
+    INPUT ; host$
     IF host$ = "" THEN host$ = DEFAULT_HOST
 
     client& = _OPENCLIENT("TCP/IP:" + STR$(HOST_PORT) + ":" + host$)
@@ -155,13 +152,13 @@ SUB Init
     END IF
 
     COLOR 14
-    PRINT "Please give me a name (so they know who to send condolences too)";
+    PRINT "Please give me your name";
     COLOR 15
     INPUT ; myname$
     '  END IF
 
     COLOR 14
-    PRINT "Auto place ships (Y/N)?";
+    PRINT "Auto place ships (Y/N)";
     COLOR 15
     INPUT ; yn$
     IF UCASE$(yn$) = "Y" THEN AutoPlaceShips = TRUE
